@@ -2,8 +2,8 @@ package main
 
 import (
 	"bufio"
-	"fmt"
 	"os"
+	"strconv"
 )
 
 const BUFFER_SIZE = 8_000
@@ -23,7 +23,8 @@ func main() {
 			bufStdout.WriteString("Buzz\n")
 			continue
 		}
-		bufStdout.WriteString(fmt.Sprintf("%d\n", i))
+		bufStdout.WriteString(strconv.Itoa(i))
+		bufStdout.WriteRune('\n')
 	}
 	bufStdout.Flush()
 }
