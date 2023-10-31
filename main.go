@@ -1,21 +1,29 @@
 package main
 
-import "fmt"
+import (
+	"bufio"
+	"fmt"
+	"os"
+)
+
+const BUFFER_SIZE = 8_000
 
 func main() {
+	bufStdout := bufio.NewWriterSize(os.Stdout, BUFFER_SIZE)
 	for i := 1; i <= 1_000_000_000; i++ {
 		if i%3 == 0 && i%5 == 0 {
-			fmt.Println("FizzBuzz")
+			bufStdout.WriteString("FizzBuzz\n")
 			continue
 		}
 		if i%3 == 0 {
-			fmt.Println("Fizz")
+			bufStdout.WriteString("Fizz\n")
 			continue
 		}
 		if i%5 == 0 {
-			fmt.Println("Buzz")
+			bufStdout.WriteString("Buzz\n")
 			continue
 		}
-		fmt.Println(i)
+		bufStdout.WriteString(fmt.Sprintf("%d\n", i))
 	}
+	bufStdout.Flush()
 }
