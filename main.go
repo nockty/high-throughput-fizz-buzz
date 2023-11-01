@@ -14,22 +14,22 @@ func main() {
 }
 
 func fizzBuzz(w io.Writer, n int) {
-	bufStdout := bufio.NewWriterSize(w, BUFFER_SIZE)
+	bufOut := bufio.NewWriterSize(w, BUFFER_SIZE)
 	for i := 1; i <= n; i++ {
 		if i%3 == 0 && i%5 == 0 {
-			bufStdout.WriteString("FizzBuzz\n")
+			bufOut.WriteString("FizzBuzz\n")
 			continue
 		}
 		if i%3 == 0 {
-			bufStdout.WriteString("Fizz\n")
+			bufOut.WriteString("Fizz\n")
 			continue
 		}
 		if i%5 == 0 {
-			bufStdout.WriteString("Buzz\n")
+			bufOut.WriteString("Buzz\n")
 			continue
 		}
-		bufStdout.WriteString(strconv.Itoa(i))
-		bufStdout.WriteRune('\n')
+		bufOut.WriteString(strconv.Itoa(i))
+		bufOut.WriteRune('\n')
 	}
-	bufStdout.Flush()
+	bufOut.Flush()
 }
