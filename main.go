@@ -1,80 +1,162 @@
 package main
 
 import (
-	"bufio"
 	"io"
 	"os"
 )
 
-const BUFFER_SIZE = 8_000
-
 const (
-	FIZZ      = "Fizz\n"
-	BUZZ      = "Buzz\n"
-	FIZZ_BUZZ = "FizzBuzz\n"
-	NEW_LINE  = '\n'
+	BUFFER_SIZE      = 2_000_000
+	BUFFER_COUNT     = 10
+	MAX_FILL_SIZE    = 6*5 + 1*9 + 8*20
+	STEPS_PER_BUFFER = BUFFER_SIZE / MAX_FILL_SIZE
 )
 
 func main() {
-	fizzBuzz(os.Stdout, 1_000_000_000)
+	fizzBuzz(os.Stdout, 8_000_000_000)
 }
 
 func fizzBuzz(w io.Writer, n int) {
-	bufOut := bufio.NewWriterSize(w, BUFFER_SIZE)
+	buffers := make([][]byte, BUFFER_COUNT)
+	for i := 0; i < BUFFER_COUNT; i++ {
+		buffers[i] = make([]byte, BUFFER_SIZE)
+	}
+
+	toWriter := make(chan []byte, BUFFER_COUNT)
+	toComputer := make(chan []byte, BUFFER_COUNT)
+	done := make(chan struct{})
+
+	for _, buf := range buffers {
+		toComputer <- buf
+	}
+
+	go write(w, toWriter, toComputer, done)
+	compute(n, toComputer, toWriter)
+
+	<-done
+}
+
+func write(w io.Writer, in, out chan []byte, done chan struct{}) {
+	for buf := range in {
+		w.Write(buf)
+		buf = buf[:BUFFER_SIZE]
+		out <- buf
+	}
+	done <- struct{}{}
+}
+
+func compute(n int, in, out chan []byte) {
 	// Intermediate buffer for writing integers. The max int64 is 19 digits in base 10.
 	var a [19]byte
+
 	i := 1
 	for i+15 <= n {
-		writeInt(i, bufOut, &a)
-		bufOut.WriteRune(NEW_LINE)
-		i++
-		writeInt(i, bufOut, &a)
-		bufOut.WriteRune(NEW_LINE)
-		bufOut.WriteString(FIZZ)
-		i += 2
-		writeInt(i, bufOut, &a)
-		bufOut.WriteRune(NEW_LINE)
-		bufOut.WriteString(BUZZ)
-		bufOut.WriteString(FIZZ)
-		i += 3
-		writeInt(i, bufOut, &a)
-		bufOut.WriteRune(NEW_LINE)
-		i++
-		writeInt(i, bufOut, &a)
-		bufOut.WriteRune(NEW_LINE)
-		bufOut.WriteString(FIZZ)
-		bufOut.WriteString(BUZZ)
-		i += 3
-		writeInt(i, bufOut, &a)
-		bufOut.WriteRune(NEW_LINE)
-		bufOut.WriteString(FIZZ)
-		i += 2
-		writeInt(i, bufOut, &a)
-		bufOut.WriteRune(NEW_LINE)
-		i++
-		writeInt(i, bufOut, &a)
-		bufOut.WriteRune(NEW_LINE)
-		bufOut.WriteString(FIZZ_BUZZ)
-		i += 2
+		buf := <-in
+		offset := 0
+		for k := 0; k < STEPS_PER_BUFFER; k++ {
+			i, offset = fillStep(i, buf, offset, &a)
+			if i+15 > n {
+				break
+			}
+		}
+		buf = buf[:offset]
+		out <- buf
 	}
+	buf := <-in
+	offset := 0
 	for i <= n {
 		if i%15 == 0 {
-			bufOut.WriteString(FIZZ_BUZZ)
+			fillFizzBuzz(buf, offset)
+			offset += 9
 		} else if i%3 == 0 {
-			bufOut.WriteString(FIZZ)
+			fillFizz(buf, offset)
+			offset += 5
 		} else if i%5 == 0 {
-			bufOut.WriteString(BUZZ)
+			fillBuzz(buf, offset)
+			offset += 5
 		} else {
-			writeInt(i, bufOut, &a)
-			bufOut.WriteRune(NEW_LINE)
+			n := fillInt(i, buf, offset, &a)
+			offset += n
 		}
 		i++
 	}
-	bufOut.Flush()
+	buf = buf[:offset]
+	out <- buf
+	close(out)
 }
 
-// writeInt writes u in base 10 in b, using a as an intermediate buffer
-func writeInt(u int, b *bufio.Writer, a *[19]byte) {
+func fillStep(i int, buf []byte, offset int, a *[19]byte) (int, int) {
+	n := fillInt(i, buf, offset, a)
+	offset += n
+	i++
+	n = fillInt(i, buf, offset, a)
+	offset += n
+	fillFizz(buf, offset)
+	offset += 5
+	i += 2
+	n = fillInt(i, buf, offset, a)
+	offset += n
+	fillBuzz(buf, offset)
+	offset += 5
+	fillFizz(buf, offset)
+	offset += 5
+	i += 3
+	n = fillInt(i, buf, offset, a)
+	offset += n
+	i++
+	n = fillInt(i, buf, offset, a)
+	offset += n
+	fillFizz(buf, offset)
+	offset += 5
+	fillBuzz(buf, offset)
+	offset += 5
+	i += 3
+	n = fillInt(i, buf, offset, a)
+	offset += n
+	fillFizz(buf, offset)
+	offset += 5
+	i += 2
+	n = fillInt(i, buf, offset, a)
+	offset += n
+	i++
+	n = fillInt(i, buf, offset, a)
+	offset += n
+	fillFizzBuzz(buf, offset)
+	offset += 9
+	i += 2
+	return i, offset
+}
+
+func fillFizz(buf []byte, offset int) {
+	buf[offset] = 'F'
+	buf[offset+1] = 'i'
+	buf[offset+2] = 'z'
+	buf[offset+3] = 'z'
+	buf[offset+4] = '\n'
+}
+
+func fillBuzz(buf []byte, offset int) {
+	buf[offset] = 'B'
+	buf[offset+1] = 'u'
+	buf[offset+2] = 'z'
+	buf[offset+3] = 'z'
+	buf[offset+4] = '\n'
+}
+
+func fillFizzBuzz(buf []byte, offset int) {
+	buf[offset] = 'F'
+	buf[offset+1] = 'i'
+	buf[offset+2] = 'z'
+	buf[offset+3] = 'z'
+	buf[offset+4] = 'B'
+	buf[offset+5] = 'u'
+	buf[offset+6] = 'z'
+	buf[offset+7] = 'z'
+	buf[offset+8] = '\n'
+}
+
+// fillInt writes u in base 10 in b, using a as an intermediate buffer
+func fillInt(u int, buf []byte, offset int, a *[19]byte) int {
 	i := 19
 
 	for u >= 1000 {
@@ -99,7 +181,13 @@ func writeInt(u int, b *bufio.Writer, a *[19]byte) {
 		a[i] = smallsString[is]
 	}
 
-	b.Write(a[i:])
+	n := 0
+	for j := i; j < 19; j++ {
+		buf[offset+n] = a[j]
+		n++
+	}
+	buf[offset+n] = '\n'
+	return n + 1
 }
 
 const smallsString = "000001002003004005006007008009010011012013014015016017018019020021022023024025026027028029030031032033034035036037038039040041042043044045046047048049050051052053054055056057058059060061062063064065066067068069070071072073074075076077078079080081082083084085086087088089090091092093094095096097098099" +
