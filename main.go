@@ -3,11 +3,14 @@ package main
 import (
 	"io"
 	"os"
+	"runtime"
 )
 
 const (
-	BUFFER_SIZE      = 2_000_000
-	BUFFER_COUNT     = 10
+	BUFFER_SIZE  = 2_000_000
+	BUFFER_COUNT = 10
+
+	// maximum number of bytes filled during a 15-lines step
 	MAX_FILL_SIZE    = 6*5 + 1*9 + 8*20
 	STEPS_PER_BUFFER = BUFFER_SIZE / MAX_FILL_SIZE
 )
@@ -17,53 +20,50 @@ func main() {
 }
 
 func fizzBuzz(w io.Writer, n int) {
-	buffers := make([][]byte, BUFFER_COUNT)
+	workerCount := runtime.NumCPU()
+	if workerCount > 1 {
+		// let another CPU run the write goroutine
+		workerCount -= 1
+	}
+	// workers consume from tasks
+	tasks := make(chan *fillTask, 100)
+	for i := 0; i < workerCount; i++ {
+		go fillWorker(tasks)
+	}
+
+	// write goroutine reads from ordered queue and sends buffers back
+	queue := make(chan *fillTask, 100)
+	buffers := make(chan []byte, BUFFER_COUNT)
 	for i := 0; i < BUFFER_COUNT; i++ {
-		buffers[i] = make([]byte, BUFFER_SIZE)
+		buffers <- make([]byte, BUFFER_SIZE)
 	}
-
-	toWriter := make(chan []byte, BUFFER_COUNT)
-	toComputer := make(chan []byte, BUFFER_COUNT)
 	done := make(chan struct{})
-
-	for _, buf := range buffers {
-		toComputer <- buf
-	}
-
-	go write(w, toWriter, toComputer, done)
-	compute(n, toComputer, toWriter)
-
-	<-done
-}
-
-func write(w io.Writer, in, out chan []byte, done chan struct{}) {
-	for buf := range in {
-		w.Write(buf)
-		buf = buf[:BUFFER_SIZE]
-		out <- buf
-	}
-	done <- struct{}{}
-}
-
-func compute(n int, in, out chan []byte) {
-	// Intermediate buffer for writing integers. The max int64 is 19 digits in base 10.
-	var a [19]byte
+	go write(w, queue, buffers, done)
 
 	i := 1
-	for i+15 <= n {
-		buf := <-in
-		offset := 0
-		for k := 0; k < STEPS_PER_BUFFER; k++ {
-			i, offset = fillStep(i, buf, offset, &a)
-			if i+15 > n {
-				break
-			}
+	for i+STEPS_PER_BUFFER*15+15 <= n {
+		buf := <-buffers
+
+		task := &fillTask{
+			buf:   buf,
+			start: i,
+			done:  make(chan struct{}, 1),
 		}
-		buf = buf[:offset]
-		out <- buf
+		// the worker will fill numbers until that one
+		i += STEPS_PER_BUFFER * 15
+
+		// send task to parallel workers
+		tasks <- task
+		// send task to ordered write queue
+		queue <- task
 	}
-	buf := <-in
+	close(tasks)
+
+	// Last iteration
+	buf := <-buffers
 	offset := 0
+	// Intermediate buffer for writing integers. The max int64 is 19 digits in base 10.
+	var a [19]byte
 	for i <= n {
 		if i%15 == 0 {
 			fillFizzBuzz(buf, offset)
@@ -80,9 +80,47 @@ func compute(n int, in, out chan []byte) {
 		}
 		i++
 	}
-	buf = buf[:offset]
-	out <- buf
-	close(out)
+	finalTask := &fillTask{
+		buf:  buf[:offset],
+		done: make(chan struct{}, 1),
+	}
+	finalTask.done <- struct{}{}
+	queue <- finalTask
+
+	close(queue)
+
+	<-done
+}
+
+func write(w io.Writer, queue <-chan *fillTask, buffers chan<- []byte, done chan struct{}) {
+	for task := range queue {
+		<-task.done
+		w.Write(task.buf)
+		task.buf = task.buf[:BUFFER_SIZE]
+		buffers <- task.buf
+	}
+	done <- struct{}{}
+}
+
+type fillTask struct {
+	buf   []byte
+	start int
+	done  chan struct{}
+}
+
+func fillWorker(tasks <-chan *fillTask) {
+	// Intermediate buffer for writing integers. The max int64 is 19 digits in base 10.
+	var a [19]byte
+
+	for task := range tasks {
+		offset := 0
+		i := task.start
+		for k := 0; k < STEPS_PER_BUFFER; k++ {
+			i, offset = fillStep(i, task.buf, offset, &a)
+		}
+		task.buf = task.buf[:offset]
+		task.done <- struct{}{}
+	}
 }
 
 func fillStep(i int, buf []byte, offset int, a *[19]byte) (int, int) {
