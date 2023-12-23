@@ -193,7 +193,7 @@ func fillFizzBuzz(buf []byte, offset int) {
 	buf[offset+8] = '\n'
 }
 
-// fillInt writes u in base 10 in b, using a as an intermediate buffer
+// fillInt writes u in base 10 in buf, using a as an intermediate buffer
 func fillInt(u int, buf []byte, offset int, a *[19]byte) int {
 	i := 19
 
@@ -214,7 +214,7 @@ func fillInt(u int, buf []byte, offset int, a *[19]byte) int {
 		i--
 		a[i] = smallsString[is+1]
 	}
-	if u > 100 {
+	if u >= 100 {
 		i--
 		a[i] = smallsString[is]
 	}
