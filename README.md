@@ -1,4 +1,12 @@
-# Fizz Buzz
+# High throughput Fizz Buzz
+
+This is my submission for the [High throughput Fizz Buzz challenge](https://codegolf.stackexchange.com/questions/215216/high-throughput-fizz-buzz).
+
+On a MacBook Pro M1 Max 2021, the throughput is around 4.4 GiB/s.
+
+## Implementation
+
+The program spawns several workers responsible for filling buffers with the expected Fizz Buzz data. Those workers are CPU-bound and run in parallel (one worker per CPU). Meanwhile, another goroutine is responsible for fetching complete buffers in the right order and writing those to stdout. There are a few other optimizations: the main loop is unrolled to perform the same 15 computations on each step (no need to compare modulos) and integers are written in base 1000 without allocation.
 
 ## History
 
