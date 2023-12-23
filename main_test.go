@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"bufio"
 	"io/fs"
 	"os"
 	"strings"
@@ -9,17 +9,48 @@ import (
 )
 
 func TestFizzBuzz(t *testing.T) {
-	content, err := os.ReadFile("expected")
+	content, err := os.ReadFile("expected100")
 	if err != nil {
-		panic(err)
+		t.Error(err)
 	}
 	expected := string(content)
 	var b strings.Builder
-	fizzBuzz(&b, 20)
+	fizzBuzz(&b, 100)
 	actual := b.String()
 	if expected != actual {
-		panic(fmt.Sprintf("unexpected output:\n%s", actual))
+		t.Errorf("unexpected output:\n%s", actual)
 	}
+}
+
+type testWriter struct {
+	t            *testing.T
+	goldenReader *bufio.Reader
+}
+
+func (w *testWriter) Write(p []byte) (n int, err error) {
+	for i, b := range p {
+		golden, err := w.goldenReader.ReadByte()
+		if err != nil {
+			return 0, err
+		}
+		if b != golden {
+			w.t.Errorf("unexpected output (byte #%d): %s != %s, \n%s", i, string(golden), string(b), p)
+		}
+	}
+	return len(p), nil
+}
+
+func TestFizzBuzzHigh(t *testing.T) {
+	golden, err := os.Open("expected10m")
+	if err != nil {
+		t.Error(err)
+	}
+	tw := &testWriter{
+		t:            t,
+		goldenReader: bufio.NewReader(golden),
+	}
+
+	fizzBuzz(tw, 10_000_000)
 }
 
 func TestFillInt(t *testing.T) {
@@ -59,7 +90,7 @@ func TestFillInt(t *testing.T) {
 func BenchmarkFizzBuzz100k(b *testing.B) {
 	f, err := os.OpenFile(os.DevNull, os.O_WRONLY, fs.ModeAppend)
 	if err != nil {
-		panic(err)
+		b.Error(err)
 	}
 	b.ReportAllocs()
 	b.ResetTimer()
