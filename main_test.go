@@ -9,7 +9,7 @@ import (
 )
 
 func TestFizzBuzz(t *testing.T) {
-	content, err := os.ReadFile("expected100")
+	content, err := os.ReadFile("golden100")
 	if err != nil {
 		t.Error(err)
 	}
@@ -41,7 +41,7 @@ func (w *testWriter) Write(p []byte) (n int, err error) {
 }
 
 func TestFizzBuzzHigh(t *testing.T) {
-	golden, err := os.Open("expected10m")
+	golden, err := os.Open("golden10m")
 	if err != nil {
 		t.Error(err)
 	}
